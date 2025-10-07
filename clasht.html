@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Titan Battle Arena</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #message-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: yellow;
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000000;
+            display: none; /* Hidden by default */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <div>Player Titan (Blue)</div>
+        <div>Health: <span id="player-health">100</span></div>
+        <div>Level: <span id="player-level">1</span></div>
+        <div>Gold: <span id="player-gold">0</span></div>
+        <button id="buy-item">Buy Damage Item (150g)</button>
+    </div>
+
+    <div id="message-container"></div>
+
+    <script src="three.min.js"></script>
+    <script>
+        // ======= BASIC SCENE SETUP =======
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x333333);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 50, 60);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(0, 10, 5);
+        scene.add(light);
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        // ======= GAME ASSETS & CONFIGURATION =======
+        const gameObjects = [];
+        const clock = new THREE.Clock();
+
+        // Game state
+        let gameOver = false;
+
+        // Map layout
+        const groundGeometry = new THREE.PlaneGeometry(100, 120);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x4a5d23 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        function createLane(yPos) {
+            const laneGeometry = new THREE.BoxGeometry(10, 0.1, 120);
+            const laneMaterial = new THREE.MeshLambertMaterial({ color: 0x6b4f34 });
+            const lane = new THREE.Mesh(laneGeometry, laneMaterial);
+            lane.position.set(0, 0.1, yPos);
+            return lane;
+        }
+        const midLane = createLane(0);
+        scene.add(midLane);
+
+
+        // ======= GAME ENTITY CLASSES =======
+        class Titan {
+            constructor(name, role, color, position) {
+                this.name = name;
+                this.role = role;
+                this.mesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 4, 8), new THREE.MeshLambertMaterial({ color }));
+                this.mesh.position.set(position.x, 2, position.z);
+                scene.add(this.mesh);
+                
+                // Stats
+                this.health = 1000;
+                this.maxHealth = 1000;
+                this.damage = 20;
+                this.range = 8;
+                this.speed = 15;
+                this.level = 1;
+                this.gold = 0;
+                this.xp = 0;
+                this.team = color === 0x0000ff ? 'blue' : 'red';
+                this.isTitan = true;
+                
+                // Health bar
+                const barGeo = new THREE.BoxGeometry(3, 0.3, 0.1);
+                const barMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                this.healthBar = new THREE.Mesh(barGeo, barMat);
+                this.healthBar.position.set(0, 5, 0);
+                this.mesh.add(this.healthBar);
+            }
+
+            updateHealthBar() {
+                const healthRatio = this.health / this.maxHealth;
+                this.healthBar.scale.x = Math.max(0, healthRatio);
+                this.healthBar.material.color.set(healthRatio > 0.5 ? 0x00ff00 : (healthRatio > 0.25 ? 0xffff00 : 0xff0000));
+            }
+            
+            attack(target) {
+                if (this.attackCooldown <= 0 && this.mesh.position.distanceTo(target.mesh.position) <= this.range) {
+                    target.health -= this.damage;
+                    this.attackCooldown = 1; // 1 second cooldown
+                    // Visual feedback for attack
+                    const projectileGeo = new THREE.SphereGeometry(0.3, 8, 8);
+                    const projectileMat = new THREE.MeshBasicMaterial({ color: this.team === 'blue' ? 0xadd8e6 : 0xffcccb });
+                    const projectile = new THREE.Mesh(projectileGeo, projectileMat);
+                    projectile.position.copy(this.mesh.position);
+                    scene.add(projectile);
+                    
+                    let t = 0;
+                    const duration = 0.2;
+                    const startPos = projectile.position.clone();
+                    const endPos = target.mesh.position.clone();
+
+                    const animateProjectile = () => {
+                        if (t < duration) {
+                            t += clock.getDelta();
+                            projectile.position.lerpVectors(startPos, endPos, t / duration);
+                            requestAnimationFrame(animateProjectile);
+                        } else {
+                            scene.remove(projectile);
+                        }
+                    };
+                    animateProjectile();
+                }
+            }
+
+            gainXP(amount) {
+                this.xp += amount;
+                if (this.xp >= this.level * 100) {
+                    this.level++;
+                    this.xp = 0;
+                    this.maxHealth += 100;
+                    this.health = this.maxHealth;
+                    this.damage += 5;
+                    console.log(`${this.name} leveled up to ${this.level}!`);
+                }
+            }
+        }
+
+        class Creep {
+             constructor(team, position) {
+                this.team = team;
+                const color = team === 'blue' ? 0x4169e1 : 0xc70039;
+                this.mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color }));
+                this.mesh.position.copy(position);
+                scene.add(this.mesh);
+
+                this.health = 100;
+                this.maxHealth = 100;
+                this.damage = 5;
+                this.range = 6;
+                this.speed = 8;
+                this.goldValue = 20;
+                this.xpValue = 30;
+                this.direction = team === 'blue' ? 1 : -1;
+
+                // Health bar
+                const barGeo = new THREE.BoxGeometry(1.5, 0.2, 0.1);
+                const barMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                this.healthBar = new THREE.Mesh(barGeo, barMat);
+                this.healthBar.position.set(0, 2, 0);
+                this.mesh.add(this.healthBar);
+            }
+
+            updateHealthBar() {
+                 const healthRatio = this.health / this.maxHealth;
+                 this.healthBar.scale.x = Math.max(0, healthRatio);
+            }
+
+            move(delta) {
+                this.mesh.position.z += this.direction * this.speed * delta;
+            }
+        }
+
+        class Tower {
+            constructor(team, position) {
+                this.team = team;
+                const color = team === 'blue' ? 0x00008b : 0x8b0000;
+                this.mesh = new THREE.Mesh(new THREE.CylinderGeometry(2, 3, 10, 8), new THREE.MeshLambertMaterial({ color }));
+                this.mesh.position.copy(position);
+                scene.add(this.mesh);
+
+                this.health = 2000;
+                this.maxHealth = 2000;
+                this.damage = 50;
+                this.range = 20;
+                this.attackCooldown = 0;
+                this.isTower = true;
+
+                // Health bar
+                const barGeo = new THREE.BoxGeometry(6, 0.4, 0.1);
+                const barMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                this.healthBar = new THREE.Mesh(barGeo, barMat);
+                this.healthBar.position.set(0, 7, 0);
+                this.mesh.add(this.healthBar);
+            }
+            
+            updateHealthBar() {
+                 const healthRatio = this.health / this.maxHealth;
+                 this.healthBar.scale.x = Math.max(0, healthRatio);
+            }
+
+            attack(target) {
+                if (this.attackCooldown <= 0 && this.mesh.position.distanceTo(target.mesh.position) <= this.range) {
+                    target.health -= this.damage;
+                    this.attackCooldown = 1.5; // Slower attack speed
+                }
+            }
+        }
+        
+        class Base {
+            constructor(team, position) {
+                this.team = team;
+                const color = team === 'blue' ? 0x0000cd : 0xcd5c5c;
+                this.mesh = new THREE.Mesh(new THREE.BoxGeometry(10, 8, 10), new THREE.MeshLambertMaterial({ color }));
+                this.mesh.position.copy(position);
+                scene.add(this.mesh);
+                this.health = 5000;
+                this.isBase = true;
+            }
+        }
+
+
+        // ======= GAME OBJECT CREATION =======
+        const player = new Titan('Player', 'Marksman', 0x0000ff, { x: 0, y: 0, z: -45 });
+        const enemyAI = new Titan('Enemy AI', 'Mage', 0xff0000, { x: 0, y: 0, z: 45 });
+        gameObjects.push(player, enemyAI);
+
+        // Bases
+        const blueBase = new Base('blue', {x: 0, y: 4, z: -55});
+        const redBase = new Base('red', {x: 0, y: 4, z: 55});
+        gameObjects.push(blueBase, redBase);
+
+        // Towers
+        const blueTower1 = new Tower('blue', { x: 0, y: 5, z: -30 });
+        const redTower1 = new Tower('red', { x: 0, y: 5, z: 30 });
+        gameObjects.push(blueTower1, redTower1);
+
+        let creepSpawnTimer = 5;
+
+        // ======= PLAYER CONTROLS =======
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+        document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+        function handlePlayerControls(delta) {
+            if (gameOver) return;
+            const moveSpeed = player.speed * delta;
+            if (keys['w']) player.mesh.position.z -= moveSpeed;
+            if (keys['s']) player.mesh.position.z += moveSpeed;
+            if (keys['a']) player.mesh.position.x -= moveSpeed;
+            if (keys['d']) player.mesh.position.x += moveSpeed;
+            
+            // Player Attack Logic
+            if (keys[' ']) { // Space bar to attack
+                let closestEnemy = null;
+                let minDistance = player.range;
+                
+                gameObjects.forEach(obj => {
+                    if (obj.team === 'red' && obj.health > 0) {
+                        const distance = player.mesh.position.distanceTo(obj.mesh.position);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestEnemy = obj;
+                        }
+                    }
+                });
+
+                if (closestEnemy) {
+                    player.attack(closestEnemy);
+                }
+            }
+        }
+
+        // ======= AI LOGIC =======
+        function handleAI(ai, delta) {
+            if (gameOver || ai.health <= 0) return;
+            
+            // Find a target
+            let target = null;
+            let minDistance = Infinity;
+
+            // Prioritize player if in range, then creeps, then towers
+            gameObjects.forEach(obj => {
+                if (obj.team === 'blue' && obj.health > 0) {
+                    const distance = ai.mesh.position.distanceTo(obj.mesh.position);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        target = obj;
+                    }
+                }
+            });
+
+            if (target) {
+                const distanceToTarget = ai.mesh.position.distanceTo(target.mesh.position);
+                if (distanceToTarget <= ai.range) {
+                    ai.attack(target); // Attack if in range
+                } else {
+                    // Move towards target
+                    const direction = new THREE.Vector3().subVectors(target.mesh.position, ai.mesh.position).normalize();
+                    ai.mesh.position.add(direction.multiplyScalar(ai.speed * delta));
+                }
+            }
+        }
+        
+        // ======= UI & ITEM SHOP =======
+        const playerHealthUI = document.getElementById('player-health');
+        const playerLevelUI = document.getElementById('player-level');
+        const playerGoldUI = document.getElementById('player-gold');
+        const buyItemButton = document.getElementById('buy-item');
+
+        buyItemButton.addEventListener('click', () => {
+            if (player.gold >= 150) {
+                player.gold -= 150;
+                player.damage += 15; // Power Spike!
+                console.log("Player bought a damage item!");
+            }
+        });
+        
+        function updateUI() {
+            playerHealthUI.textContent = `${Math.round(player.health)} / ${player.maxHealth}`;
+            playerLevelUI.textContent = player.level;
+            playerGoldUI.textContent = player.gold;
+        }
+
+        // ======= GAME LOOP =======
+        function animate() {
+            if (gameOver) return;
+
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            // --- Timers ---
+            if (player.attackCooldown > 0) player.attackCooldown -= delta;
+            if (enemyAI.attackCooldown > 0) enemyAI.attackCooldown -= delta;
+            blueTower1.attackCooldown -= delta;
+            redTower1.attackCooldown -= delta;
+            
+            // --- Player Input ---
+            handlePlayerControls(delta);
+            
+            // --- AI Behavior ---
+            handleAI(enemyAI, delta);
+
+            // --- Creep Spawning ---
+            creepSpawnTimer -= delta;
+            if (creepSpawnTimer <= 0) {
+                const blueCreep = new Creep('blue', { x: 0, y: 0.5, z: -50 });
+                const redCreep = new Creep('red', { x: 0, y: 0.5, z: 50 });
+                gameObjects.push(blueCreep, redCreep);
+                creepSpawnTimer = 15; // Spawn every 15 seconds
+            }
+
+            // --- Game Logic Updates ---
+            const objectsToRemove = [];
+            gameObjects.forEach(obj => {
+                // Creep movement and attacking
+                if (obj instanceof Creep) {
+                    let isBlocked = false;
+                    let target = null;
+                    let minDistance = obj.range;
+
+                    gameObjects.forEach(other => {
+                        if (other.team !== obj.team && other.health > 0) {
+                            const distance = obj.mesh.position.distanceTo(other.mesh.position);
+                            if (distance < minDistance) {
+                                isBlocked = true;
+                                minDistance = distance;
+                                target = other;
+                            }
+                        }
+                    });
+
+                    if (isBlocked && target) {
+                        obj.attackCooldown = obj.attackCooldown > 0 ? obj.attackCooldown - delta : 0;
+                        if(obj.attackCooldown <= 0) {
+                             target.health -= obj.damage;
+                             obj.attackCooldown = 1;
+                        }
+                    } else {
+                        obj.move(delta);
+                    }
+                }
+                
+                // Tower attacking
+                if (obj instanceof Tower) {
+                    let target = null;
+                    let minDistance = obj.range;
+                    gameObjects.forEach(other => {
+                       if (other.team !== obj.team && other.health > 0) {
+                            const distance = obj.mesh.position.distanceTo(other.mesh.position);
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                target = other;
+                            }
+                       }
+                    });
+                    if (target) obj.attack(target);
+                }
+
+                // Health checks and removal
+                if (obj.health <= 0) {
+                    objectsToRemove.push(obj);
+                    // Award gold and XP for creep kills
+                    if (obj instanceof Creep) {
+                        const killer = obj.team === 'red' ? player : enemyAI;
+                        killer.gold += obj.goldValue;
+                        killer.gainXP(obj.xpValue);
+                    }
+                }
+
+                // Update health bars for dynamic objects
+                if (obj.updateHealthBar) {
+                    obj.updateHealthBar();
+                }
+            });
+            
+            // Clean up destroyed objects
+            objectsToRemove.forEach(obj => {
+                scene.remove(obj.mesh);
+                if(obj.healthBar) scene.remove(obj.healthBar);
+                const index = gameObjects.indexOf(obj);
+                if (index > -1) {
+                    gameObjects.splice(index, 1);
+                }
+                
+                // Check for win/loss condition
+                if (obj.isBase) {
+                    gameOver = true;
+                    const winner = obj.team === 'blue' ? 'Red Team' : 'Blue Team';
+                    document.getElementById('message-container').textContent = `${winner} Wins!`;
+                    document.getElementById('message-container').style.display = 'block';
+                }
+            });
+
+            updateUI();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+
+</body>
+</html>
