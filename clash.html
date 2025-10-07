@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clash of Titans 3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            color: white;
+            font-family: 'Cinzel', serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        .health-bar-container {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #555;
+            padding: 10px;
+            border-radius: 10px;
+            width: 30%;
+            min-width: 250px;
+        }
+
+        .health-bar-container h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+        }
+
+        .health-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #444;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #222;
+        }
+
+        .health-bar-fill {
+            height: 100%;
+            background-color: #c0392b;
+            width: 100%;
+            transition: width 0.3s ease-in-out;
+            border-radius: 5px;
+        }
+
+        #player-health .health-bar-fill {
+            background-color: #27ae60;
+        }
+
+        #message-container {
+            position: absolute;
+            bottom: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2em;
+            text-align: center;
+            display: none;
+            text-shadow: 3px 3px 6px #000;
+        }
+
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        #game-over-screen h1 {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        #game-over-screen button {
+            font-family: 'Cinzel', serif;
+            font-size: 1.5em;
+            padding: 15px 30px;
+            border: 2px solid #fff;
+            background: transparent;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        #game-over-screen button:hover {
+            background: #fff;
+            color: #000;
+        }
+
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <!-- UI Elements for Health Bars and Messages -->
+    <div id="ui-container">
+        <div id="player-health" class="health-bar-container">
+            <h2>Player Titan</h2>
+            <div class="health-bar">
+                <div id="player-health-fill" class="health-bar-fill"></div>
+            </div>
+        </div>
+        <div id="enemy-health" class="health-bar-container">
+            <h2>Enemy Titan</h2>
+            <div class="health-bar">
+                <div id="enemy-health-fill" class="health-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="message-container"></div>
+    
+    <div id="controls-info">
+        <strong>Controls:</strong><br>
+        W/S: Move Forward/Backward<br>
+        A/D: Rotate Left/Right<br>
+        Spacebar: Attack
+    </div>
+    
+    <!-- Game Over Screen -->
+    <div id="game-over-screen">
+        <h1 id="game-over-message">You Win!</h1>
+        <button onclick="restartGame()">Play Again</button>
+    </div>
+
+    <script>
+        // --- SCENE SETUP ---
+        let scene, camera, renderer, player, enemy;
+        let playerHealth = 100, enemyHealth = 100;
+        let isGameOver = false;
+        let isAttacking = false;
+        let enemyAttackCooldown = 2.0; // seconds
+        let enemyAttackTimer = enemyAttackCooldown;
+        
+        // Keyboard state tracking
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            // Attack on spacebar key up
+            if (e.code === 'Space' && !isAttacking && !isGameOver) {
+                attack();
+            }
+        });
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a2a3a);
+            scene.fog = new THREE.Fog(0x1a2a3a, 10, 50);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 10, 15);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // --- LIGHTING ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // --- OBJECTS ---
+            // Ground
+            const groundGeometry = new THREE.PlaneGeometry(100, 100);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x34495e });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            // Player Titan
+            player = createTitanModel(0x27ae60);
+            player.position.set(-10, 2.75, 0); // Adjust Y for new model height
+            scene.add(player);
+            
+            // Enemy Titan
+            enemy = createTitanModel(0xc0392b);
+            enemy.scale.set(1.2, 1.2, 1.2); // Make enemy slightly bigger
+            enemy.position.set(10, 3.3, 0); // Adjust Y for new model height
+            scene.add(enemy);
+
+            // Initial UI update
+            updateHealthBars();
+
+            // Start animation loop
+            animate();
+        }
+
+        function createTitanModel(color) {
+            const titan = new THREE.Group();
+            const material = new THREE.MeshStandardMaterial({ color: color });
+
+            // Torso
+            const torsoGeometry = new THREE.BoxGeometry(2, 2.5, 1);
+            const torso = new THREE.Mesh(torsoGeometry, material);
+            torso.castShadow = true;
+            torso.receiveShadow = true;
+            titan.add(torso);
+
+            // Head
+            const headGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const head = new THREE.Mesh(headGeometry, material.clone());
+            head.position.y = 2;
+            head.castShadow = true;
+            titan.add(head);
+
+            // Arms
+            const armGeometry = new THREE.BoxGeometry(0.5, 2.2, 0.5);
+            const leftArm = new THREE.Mesh(armGeometry, material.clone());
+            leftArm.position.set(-1.25, 0.15, 0);
+            leftArm.castShadow = true;
+            titan.add(leftArm);
+
+            const rightArm = new THREE.Mesh(armGeometry, material.clone());
+            rightArm.position.set(1.25, 0.15, 0);
+            rightArm.castShadow = true;
+            titan.add(rightArm);
+
+            // Legs
+            const legGeometry = new THREE.BoxGeometry(0.6, 1.5, 0.6);
+            const leftLeg = new THREE.Mesh(legGeometry, material.clone());
+            leftLeg.position.set(-0.5, -2, 0);
+            leftLeg.castShadow = true;
+            titan.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeometry, material.clone());
+            rightLeg.position.set(0.5, -2, 0);
+            rightLeg.castShadow = true;
+            titan.add(rightLeg);
+
+            return titan;
+        }
+
+        // --- GAME LOGIC ---
+        function updatePlayer(delta) {
+            if (isGameOver) return;
+            const moveSpeed = 5 * delta;
+            const rotateSpeed = 2 * delta;
+
+            if (keys['KeyW']) {
+                player.translateZ(-moveSpeed);
+            }
+            if (keys['KeyS']) {
+                player.translateZ(moveSpeed);
+            }
+            if (keys['KeyA']) {
+                player.rotation.y += rotateSpeed;
+            }
+            if (keys['KeyD']) {
+                player.rotation.y -= rotateSpeed;
+            }
+        }
+
+        function updateEnemy(delta) {
+            if (isGameOver) return;
+            const distance = player.position.distanceTo(enemy.position);
+            
+            // Look at player
+            enemy.lookAt(player.position.x, enemy.position.y, player.position.z);
+            
+            // Move towards player if not too close
+            if (distance > 5) {
+                const moveSpeed = 3 * delta;
+                enemy.translateZ(moveSpeed);
+            } else {
+                // If close enough, start attack countdown
+                enemyAttackTimer -= delta;
+                if (enemyAttackTimer <= 0) {
+                    enemyAttack();
+                    enemyAttackTimer = enemyAttackCooldown + Math.random(); // Reset with slight variation
+                }
+            }
+        }
+        
+        function attack() {
+            if (isAttacking) return;
+            isAttacking = true;
+
+            const originalPosition = player.position.z;
+            const attackDistance = 3;
+
+            // Simple lunge animation
+            const lungeForward = () => {
+                const forward = new THREE.Vector3(0, 0, -1);
+                forward.applyQuaternion(player.quaternion);
+                const targetPosition = player.position.clone().add(forward.multiplyScalar(attackDistance));
+                
+                // Tween-like movement
+                let startTime = null;
+                const duration = 150; // ms
+                function animateLunge(timestamp) {
+                    if (!startTime) startTime = timestamp;
+                    const progress = (timestamp - startTime) / duration;
+                    if (progress < 1) {
+                        player.position.lerp(targetPosition, progress);
+                        requestAnimationFrame(animateLunge);
+                    } else {
+                        player.position.copy(targetPosition);
+                        checkHit();
+                        lungeBackward();
+                    }
+                }
+                requestAnimationFrame(animateLunge);
+            };
+            
+            const lungeBackward = () => {
+                 const backward = new THREE.Vector3(0, 0, 1);
+                backward.applyQuaternion(player.quaternion);
+                const targetPosition = player.position.clone().add(backward.multiplyScalar(attackDistance));
+
+                let startTime = null;
+                const duration = 200;
+                function animateReturn(timestamp) {
+                    if (!startTime) startTime = timestamp;
+                    const progress = (timestamp - startTime) / duration;
+                    if (progress < 1) {
+                         player.position.lerp(targetPosition, progress);
+                         requestAnimationFrame(animateReturn);
+                    } else {
+                        player.position.copy(targetPosition);
+                        isAttacking = false;
+                    }
+                }
+                 requestAnimationFrame(animateReturn);
+            };
+            
+            lungeForward();
+        }
+
+        function enemyAttack() {
+            if (isGameOver) return; // Don't attack if game is over
+
+            const attackDistance = 3.5;
+            const originalPosition = enemy.position.clone();
+
+            const forward = new THREE.Vector3(0, 0, 1);
+            forward.applyQuaternion(enemy.quaternion);
+            const targetPosition = enemy.position.clone().add(forward.multiplyScalar(attackDistance));
+            
+            // Lunge forward
+            let startTime = null;
+            const duration = 150; 
+            function animateLunge(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const progress = Math.min((timestamp - startTime) / duration, 1);
+                
+                enemy.position.lerpVectors(originalPosition, targetPosition, progress);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateLunge);
+                } else {
+                    checkEnemyHit();
+                    lungeBackward();
+                }
+            }
+            requestAnimationFrame(animateLunge);
+
+            // Lunge backward
+            const lungeBackward = () => {
+                let returnStartTime = null;
+                const returnDuration = 200;
+                function animateReturn(timestamp) {
+                    if (!returnStartTime) returnStartTime = timestamp;
+                    const progress = Math.min((timestamp - returnStartTime) / returnDuration, 1);
+                    
+                    enemy.position.lerpVectors(targetPosition, originalPosition, progress);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animateReturn);
+                    }
+                }
+                requestAnimationFrame(animateReturn);
+            };
+        }
+
+        function checkHit() {
+            const distance = player.position.distanceTo(enemy.position);
+            if (distance < 5) { // Attack range
+                enemyHealth -= 10;
+                if (enemyHealth < 0) enemyHealth = 0;
+                updateHealthBars();
+                
+                // Visual feedback for hit
+                showMessage("HIT!", 500);
+                flashColor(enemy, 0xffffff, 200);
+
+                if (enemyHealth <= 0) {
+                    endGame(true); // Player wins
+                }
+            } else {
+                 showMessage("MISS!", 500);
+            }
+        }
+
+        function checkEnemyHit() {
+            const distance = enemy.position.distanceTo(player.position);
+            if (distance < 4.5) { // Enemy attack range
+                playerHealth -= 15;
+                if (playerHealth < 0) playerHealth = 0;
+                updateHealthBars();
+
+                // Visual feedback for being hit
+                flashColor(player, 0xffffff, 200);
+
+                if (playerHealth <= 0) {
+                    endGame(false); // Player loses
+                }
+            }
+        }
+
+        // --- UI & FEEDBACK ---
+        function updateHealthBars() {
+            document.getElementById('player-health-fill').style.width = playerHealth + '%';
+            document.getElementById('enemy-health-fill').style.width = enemyHealth + '%';
+        }
+
+        function showMessage(text, duration) {
+            const msgEl = document.getElementById('message-container');
+            msgEl.textContent = text;
+            msgEl.style.display = 'block';
+            setTimeout(() => {
+                msgEl.style.display = 'none';
+            }, duration);
+        }
+
+        function flashColor(object, color, duration) {
+            const originalColors = [];
+            // The object is a Group, so we traverse its children
+            object.traverse(child => {
+                if (child.isMesh) {
+                    originalColors.push({ mesh: child, color: child.material.color.getHex() });
+                    child.material.color.setHex(color);
+                }
+            });
+
+            setTimeout(() => {
+                originalColors.forEach(data => {
+                    data.mesh.material.color.setHex(data.color);
+                });
+            }, duration);
+        }
+
+        function endGame(playerWon) {
+            isGameOver = true;
+            const screen = document.getElementById('game-over-screen');
+            const message = document.getElementById('game-over-message');
+            message.textContent = playerWon ? "Victory!" : "Defeat!";
+            screen.style.display = 'flex';
+        }
+
+        function restartGame() {
+            playerHealth = 100;
+            enemyHealth = 100;
+            isGameOver = false;
+            isAttacking = false;
+            enemyAttackTimer = enemyAttackCooldown;
+            
+            player.position.set(-10, 2.75, 0);
+            player.rotation.set(0,0,0);
+            enemy.position.set(10, 3.3, 0);
+
+            updateHealthBars();
+            document.getElementById('game-over-screen').style.display = 'none';
+            // animate() will handle the rest as it's still running
+        }
+
+        // --- ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            if (!isGameOver) {
+                updatePlayer(delta);
+                updateEnemy(delta);
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // --- WINDOW RESIZE ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- START GAME ---
+        init();
+    </script>
+</body>
+</html>
+
+
