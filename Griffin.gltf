@@ -1,0 +1,285 @@
+{
+  "accessors": [
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 65532,
+      "max": [
+        0.36077120900154114,
+        0.5694714784622192,
+        0.7354174256324768
+      ],
+      "min": [
+        -0.3607703447341919,
+        -0.2495109736919403,
+        -0.518042266368866
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 786384,
+      "componentType": 5126,
+      "count": 65532,
+      "max": [
+        0.999989926815033,
+        0.9999988079071045,
+        0.9999963641166687
+      ],
+      "min": [
+        -0.9999955892562866,
+        -0.999871551990509,
+        -0.9999916553497314
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5125,
+      "count": 369879,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 1572768,
+      "componentType": 5126,
+      "count": 2792,
+      "max": [
+        0.3478950262069702,
+        0.5661376714706421,
+        0.7327951788902283
+      ],
+      "min": [
+        -0.34552353620529175,
+        -0.23986196517944336,
+        -0.518042266368866
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 1606272,
+      "componentType": 5126,
+      "count": 2792,
+      "max": [
+        0.9990651607513428,
+        0.9975367784500122,
+        0.9929574728012085
+      ],
+      "min": [
+        -0.9984237551689148,
+        -0.9921904802322388,
+        -0.9999595880508423
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 1479516,
+      "componentType": 5125,
+      "count": 3513,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 1639776,
+      "componentType": 5126,
+      "count": 14010,
+      "max": [
+        0.23679117858409882,
+        0.24798433482646942,
+        -0.28324243426322937
+      ],
+      "min": [
+        -0.23779964447021484,
+        -0.25103721022605896,
+        -0.5170860886573792
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 1807896,
+      "componentType": 5126,
+      "count": 14010,
+      "max": [
+        0.9997053146362305,
+        0.9995563626289368,
+        0.9999736547470093
+      ],
+      "min": [
+        -0.9992894530296326,
+        -0.9998295307159424,
+        -1.0
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 1493568,
+      "componentType": 5125,
+      "count": 76650,
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "extras": {
+      "author": "Grell (https://sketchfab.com/grell)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/griffin-sf-101-2b1d479246cc4bdd8c2c80ada9234f25",
+      "title": "Griffin_SF_101"
+    },
+    "generator": "Sketchfab-16.67.0",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 1800168,
+      "name": "floatBufferViews",
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1976016,
+      "byteOffset": 1800168,
+      "byteStride": 12,
+      "name": "floatBufferViews",
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 3776184,
+      "uri": "scene.bin"
+    }
+  ],
+  "extensionsUsed": [
+    "KHR_materials_specular"
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "extensions": {
+        "KHR_materials_specular": {
+          "specularColorFactor": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specularFactor": 0.19961965598371345
+        }
+      },
+      "name": "material_0",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.008638014590228575,
+          0.40860755893526485,
+          0.6994024055223932,
+          1.0
+        ],
+        "metallicFactor": 0.6445733929855786,
+        "roughnessFactor": 0.6019065962867696
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Object_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 0
+          },
+          "indices": 2,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "Object_1",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 4,
+            "POSITION": 3
+          },
+          "indices": 5,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "Object_2",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 7,
+            "POSITION": 6
+          },
+          "indices": 8,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "children": [
+        1
+      ],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "Sketchfab_model"
+    },
+    {
+      "children": [
+        2,
+        3,
+        4
+      ],
+      "name": "Griffin_SF_101.obj.cleaner.materialmerger.gles"
+    },
+    {
+      "mesh": 0,
+      "name": "Object_2"
+    },
+    {
+      "mesh": 1,
+      "name": "Object_3"
+    },
+    {
+      "mesh": 2,
+      "name": "Object_4"
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Sketchfab_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ]
+}
