@@ -57,8 +57,8 @@
 <body>
 
     <div id="ui-container">
-        <button id="effect-trigger">Trigger Effect</button>
-        <div id="effect-info">Lightning Storm</div>
+        <button id="effect-trigger">Next: Lightning Storm</button>
+        <div id="effect-info"></div>
     </div>
 
     <script type="importmap">
@@ -90,8 +90,21 @@
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 1, 0);
+    controls.target.set(0, 1, 0); // Default target, will be updated by model's center
     controls.update();
+
+    // ## New: Basic Scene Lighting ##
+    // Ambient Light: Soft, non-directional light that illuminates all objects equally.
+    // Prevents purely black shadows and makes the model generally visible.
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); // Soft white light, 30% intensity
+    scene.add(ambientLight);
+
+    // Directional Light: Mimics sunlight, casting light from a specific direction.
+    // Creates highlights and shadows, giving the model definition.
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7); // White light, 70% intensity
+    directionalLight.position.set(5, 10, 7.5); // Position the light source
+    scene.add(directionalLight);
+
 
     // ## 2. Post-Processing ##
     const composer = new EffectComposer(renderer);
@@ -142,7 +155,7 @@
         const modelBox = new THREE.Box3().setFromObject(model);
         modelSize.copy(modelBox.getSize(new THREE.Vector3()));
         modelCenter.copy(modelBox.getCenter(new THREE.Vector3()));
-        controls.target.copy(modelCenter);
+        controls.target.copy(modelCenter); // Point camera controls to the model's center
     });
 
     // ## 5. Effect Creation Functions ##
@@ -200,197 +213,4 @@
             p.position.set(Math.cos(angle) * radius + origin.x, origin.y + (i / 200) * modelSize.y, Math.sin(angle) * radius + origin.z);
             p.userData.angle = angle;
             p.userData.radius = radius;
-            p.userData.life = 1.0;
-            p.userData.speed = 0.05;
-            effectGroups.spiral.add(p);
-        }
-    }
-
-    function triggerFlare(colors) {
-        if (effectGroups.flare.children.length) return;
-        effectData.flare.isActive = true;
-        const origin = modelCenter.clone().add(new THREE.Vector3(0, modelSize.y / 2, 0)); // Start from top
-        for (let i = 0; i < 200; i++) {
-            const geo = new THREE.PlaneGeometry(0.08 + Math.random() * 0.04, 0.4 + Math.random() * 0.3);
-            const mat = new THREE.MeshBasicMaterial({ color: colors[Math.floor(Math.random() * colors.length)], transparent: true, blending: THREE.AdditiveBlending });
-            const f = new THREE.Mesh(geo, mat);
-            f.position.copy(origin);
-            const dir = new THREE.Vector3((Math.random() - 0.5) * 2, -Math.random() * 0.8, (Math.random() - 0.5) * 2).normalize();
-            f.lookAt(dir.clone().add(f.position));
-            f.userData.velocity = dir.multiplyScalar(0.05 + Math.random() * 0.10);
-            f.userData.life = 1.0;
-            effectGroups.flare.add(f);
-        }
-    }
-
-    function createCylinder(start, end, radius) {
-        const dir = new THREE.Vector3().subVectors(end, start);
-        const orient = new THREE.Matrix4().lookAt(start, end, new THREE.Object3D().up);
-        const rot = new THREE.Matrix4().makeRotationX(Math.PI * 0.5);
-        orient.multiply(rot);
-        const geo = new THREE.CylinderGeometry(radius, radius, dir.length(), 8, 1, true);
-        geo.applyMatrix4(orient);
-        geo.translate((start.x + end.x) / 2, (start.y + end.y) / 2, (start.z + end.z) / 2);
-        return geo;
-    }
-
-    function createEnhancedLightningBolt() {
-        // Clear previous lightning
-        effectGroups.lightning.children.forEach(c => { if(c.isMesh) { c.geometry.dispose(); c.material.dispose(); } });
-        effectGroups.lightning.clear();
-
-        const origin = modelCenter.clone().add(new THREE.Vector3(0, modelSize.y / 2 + 0.5, 0)); // Start from top of model
-
-        function branch(start, dir, energy, depth) {
-            if (energy < 0.3 || depth > 15) return;
-            const len = (Math.random() * 0.7 + 0.3) * energy * 0.6;
-            const end = start.clone().add(dir.clone().multiplyScalar(len));
-            const rad = 0.005 + (energy / 120) + Math.random() * 0.005;
-            const seg = createCylinder(start, end, rad);
-            const mesh = new THREE.Mesh(seg, lightningMaterial.clone());
-            effectGroups.lightning.add(mesh);
-            
-            const nextE = energy * (0.85 + Math.random() * 0.1);
-            const nextDir = dir.clone().add(new THREE.Vector3((Math.random() - 0.5) * 4.5, (Math.random() - 0.5) * 2.5, (Math.random() - 0.5) * 4.5)).normalize();
-            branch(end, nextDir, nextE, depth + 1);
-
-            if (Math.random() < 0.6 && depth > 0) {
-                const bDir = new THREE.Vector3((Math.random() - 0.5) * 6.0, (Math.random() - 0.5) * 4.0, (Math.random() - 0.5) * 6.0).normalize();
-                branch(end, bDir, nextE * 0.7, depth + 1);
-            }
-        }
-        const n = Math.floor(Math.random() * 4) + 7;
-        for (let i = 0; i < n; i++) {
-            const d = new THREE.Vector3((Math.random() - 0.5) * 3.5, - (Math.random() * 0.7 + 0.3), (Math.random() - 0.5) * 3.5).normalize();
-            branch(origin, d, 7, 0);
-        }
-    }
-
-    // ## 6. UI Interaction ##
-    document.getElementById('effect-trigger').addEventListener('click', () => {
-        if (Object.values(effectData).some(d => d.isActive)) return;
-        
-        const theme = effectThemes[effectState];
-        document.getElementById('effect-info').textContent = theme.name;
-        
-        const originalBloomStrength = 1.2;
-        let tempBloomStrength = originalBloomStrength;
-        
-        switch (theme.effect) {
-            case 'lightning':
-                createEnhancedLightningBolt();
-                effectData.lightning.isActive = true;
-                effectData.lightning.startTime = clock.getElapsedTime();
-                tempBloomStrength = 4.5;
-                break;
-            case 'shards':
-                triggerShardBurst(theme.shardColors);
-                tempBloomStrength = 5.5;
-                break;
-            case 'rings':
-                triggerRings(theme.ringColors);
-                tempBloomStrength = 4.0;
-                break;
-            case 'spiral':
-                triggerSpiral(theme.spiralColors);
-                tempBloomStrength = 3.5;
-                break;
-            case 'flare':
-                triggerFlare(theme.flareColors);
-                tempBloomStrength = 5.5;
-                break;
-        }
-
-        bloomPass.strength = tempBloomStrength;
-        setTimeout(() => { bloomPass.strength = originalBloomStrength; }, 600);
-        
-        effectState = (effectState + 1) % effectThemes.length;
-        // Pre-update the text for the next click
-        document.getElementById('effect-trigger').textContent = `Next: ${effectThemes[effectState].name}`;
-    });
-    // Set initial button text
-    document.getElementById('effect-trigger').textContent = `Next: ${effectThemes[1].name}`;
-
-
-    // ## 7. Animation Loop & Effect Updates ##
-    function animate() {
-        requestAnimationFrame(animate);
-        const et = clock.getElapsedTime();
-        
-        if (effectData.lightning.isActive) {
-            const life = (et - effectData.lightning.startTime) / effectData.lightning.duration;
-            effectGroups.lightning.traverse(c => {
-                if (c.isMesh && c.material.uniforms) {
-                    c.material.uniforms.uTime.value = et;
-                    c.material.uniforms.uLife.value = life;
-                    c.material.uniforms.uFlicker.value = Math.random() > 0.05 ? 1.0 : 0.0;
-                }
-            });
-            if (life >= 1.0) effectData.lightning.isActive = false;
-        }
-
-        if (effectData.shards.isActive) {
-            if (!effectGroups.shards.children.length) { effectData.shards.isActive = false; }
-            for (let i = effectGroups.shards.children.length - 1; i >= 0; i--) {
-                const s = effectGroups.shards.children[i];
-                s.position.add(s.userData.velocity);
-                s.userData.life -= 0.015;
-                s.material.opacity = s.userData.life;
-                if (s.userData.life <= 0) { s.geometry.dispose(); s.material.dispose(); effectGroups.shards.remove(s); }
-            }
-        }
-        
-        if (effectData.rings.isActive) {
-            if (!effectGroups.rings.children.length) { effectData.rings.isActive = false; }
-            for (let i = effectGroups.rings.children.length - 1; i >= 0; i--) {
-                const r = effectGroups.rings.children[i];
-                r.scale.addScalar(r.userData.speed);
-                r.userData.life -= 0.01;
-                r.material.opacity = r.userData.life;
-                if (r.userData.life <= 0) { r.geometry.dispose(); r.material.dispose(); effectGroups.rings.remove(r); }
-            }
-        }
-
-        if (effectData.spiral.isActive) {
-            if (!effectGroups.spiral.children.length) { effectData.spiral.isActive = false; }
-            for (let i = effectGroups.spiral.children.length - 1; i >= 0; i--) {
-                const p = effectGroups.spiral.children[i];
-                p.userData.angle += p.userData.speed;
-                p.userData.radius += 0.02;
-                p.position.x = Math.cos(p.userData.angle) * p.userData.radius + modelCenter.x;
-                p.position.z = Math.sin(p.userData.angle) * p.userData.radius + modelCenter.z;
-                p.position.y += 0.03;
-                p.userData.life -= 0.008;
-                p.material.opacity = p.userData.life;
-                if (p.userData.life <= 0) { p.geometry.dispose(); p.material.dispose(); effectGroups.spiral.remove(p); }
-            }
-        }
-
-        if (effectData.flare.isActive) {
-            if (!effectGroups.flare.children.length) { effectData.flare.isActive = false; }
-            for (let i = effectGroups.flare.children.length - 1; i >= 0; i--) {
-                const f = effectGroups.flare.children[i];
-                f.position.add(f.userData.velocity);
-                f.userData.velocity.y -= 0.0008;
-                f.userData.life -= 0.010;
-                f.material.opacity = f.userData.life * (0.85 + Math.sin(et * 15 + i * 0.5) * 0.15);
-                if (f.userData.life <= 0) { f.geometry.dispose(); f.material.dispose(); effectGroups.flare.remove(f); }
-            }
-        }
-        
-        controls.update();
-        composer.render();
-    }
-    animate();
-
-    // ## 8. Window Resize ##
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        composer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    </script>
-</body>
-</html>
+            p.
